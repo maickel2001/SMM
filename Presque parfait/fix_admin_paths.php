@@ -27,9 +27,11 @@ echo "<!DOCTYPE html>
     <h1>🛠️ Correction des Fichiers Admin</h1>";
 
 // Détecter le bon chemin de base
+$current_dir = __DIR__;
 $base_paths = [
-    '/workspace/Presque parfait',
-    '/workspace/Presque parfait '
+    $current_dir,
+    dirname($current_dir) . '/Presque parfait',
+    dirname($current_dir) . '/Presque parfait '
 ];
 
 $correct_base_path = '';
@@ -78,14 +80,14 @@ foreach ($admin_files as $file) {
     $content = file_get_contents($file_path);
     $original_content = $content;
     
-    // Corrections des chemins
+    // Corrections des chemins - utiliser des chemins absolus
     $replacements = [
         "require_once '../includes/auth.php';" => "require_once '$correct_base_path/includes/auth.php';",
         "require_once '../config/database.php';" => "require_once '$correct_base_path/config/database.php';",
-        "href=\"../assets/css/style.css\"" => "href=\"" . str_replace('/workspace/', '', $correct_base_path) . "/assets/css/style.css\"",
-        "href=\"../index.php\"" => "href=\"" . str_replace('/workspace/', '', $correct_base_path) . "/index.php\"",
-        "header('Location: ../index.php')" => "header('Location: " . str_replace('/workspace/', '', $correct_base_path) . "/index.php')",
-        "action=\"../logout.php\"" => "action=\"" . str_replace('/workspace/', '', $correct_base_path) . "/logout.php\""
+        "href=\"../assets/css/style.css\"" => "href=\"../assets/css/style.css\"",
+        "href=\"../index.php\"" => "href=\"../index.php\"",
+        "header('Location: ../index.php')" => "header('Location: ../index.php')",
+        "action=\"../logout.php\"" => "action=\"../logout.php\""
     ];
     
     $file_modified = false;
@@ -122,7 +124,7 @@ echo "<div class='card'>
 if (file_exists($auth_path)) {
     $auth_content = file_get_contents($auth_path);
     
-    // Corriger le chemin dans auth.php
+    // Corriger le chemin dans auth.php pour utiliser un chemin absolu
     $corrected_require = "require_once '$config_path';";
     if (strpos($auth_content, "require_once 'config/database.php';") !== false) {
         $auth_content = str_replace("require_once 'config/database.php';", $corrected_require, $auth_content);
@@ -136,36 +138,6 @@ if (file_exists($auth_path)) {
 }
 
 echo "</div>";
-
-// Créer un fichier .htaccess pour résoudre les problèmes d'espaces
-$htaccess_content = '# Correction pour les espaces dans les noms de dossiers
-RewriteEngine On
-
-# Redirection des anciens liens admin
-RewriteRule ^admin/(.*)$ "Presque parfait /admin/$1" [L]
-
-# Gestion des erreurs
-ErrorDocument 404 /index.php
-
-# Sécurité
-<Files "*.sql">
-    Order allow,deny
-    Deny from all
-</Files>
-
-<Files "*.md">
-    Order allow,deny
-    Deny from all
-</Files>
-';
-
-$htaccess_path = '/workspace/.htaccess';
-if (file_put_contents($htaccess_path, $htaccess_content)) {
-    echo "<div class='card'>
-    <h2>⚙️ Configuration serveur</h2>
-    <p class='success'>✅ Fichier .htaccess créé pour résoudre les problèmes d'espaces</p>
-    </div>";
-}
 
 // Instructions finales
 echo "<div class='card'>
@@ -182,11 +154,8 @@ echo "</div>";
 
 echo "<div class='card'>
 <h2>🧪 Test final</h2>
-<p class='info'>Maintenant, testez l'accès admin avec ces URLs:</p>
-<ul>
-<li><strong>Option 1:</strong> <code>http://votre-domaine.com/" . str_replace('/workspace/', '', $correct_base_path) . "/admin/login.php</code></li>
-<li><strong>Option 2:</strong> <code>http://votre-domaine.com/admin/login.php</code> (avec .htaccess)</li>
-</ul>
+<p class='info'>Maintenant, testez l'accès admin avec cette URL:</p>
+<p><strong>URL Admin:</strong> <code>http://votre-domaine.com/Presque parfait/admin/login.php</code></p>
 
 <p><strong>Identifiants:</strong></p>
 <pre>Email: admin@smm.com
@@ -205,7 +174,7 @@ echo "<div class='card'>
 
 echo "<div style='text-align: center; margin: 20px 0;'>
 <a href='test_admin_direct.php' class='btn'>🔧 Retour au Test</a>
-<a href='" . str_replace('/workspace/', '', $correct_base_path) . "/admin/login.php' class='btn'>🚀 Tester Admin Corrigé</a>
+<a href='admin/login.php' class='btn'>🚀 Tester Admin Corrigé</a>
 </div>";
 
 echo "</div>
