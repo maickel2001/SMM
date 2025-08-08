@@ -253,6 +253,16 @@ $stats = [
                                             }
                                             ?>
                                         </span>
+                                        <?php if ($order['status'] === 'cancelled' && !empty($order['cancel_reason'])): ?>
+                                            <div style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(255, 68, 68, 0.1); border-radius: 5px; border-left: 3px solid #ff4444;">
+                                                <small style="color: #ff4444; font-weight: 600;">
+                                                    <i class="fas fa-exclamation-triangle"></i> Motif d'annulation:
+                                                </small>
+                                                <div style="color: var(--text-primary); font-size: 0.9rem; margin-top: 0.25rem;">
+                                                    <?php echo htmlspecialchars($order['cancel_reason']); ?>
+                                                </div>
+                                            </div>
+                                        <?php endif; ?>
                                     </td>
                                     <td><?php echo date('d/m/Y H:i', strtotime($order['created_at'])); ?></td>
                                     <td>
@@ -314,6 +324,17 @@ $stats = [
                                     </a>
                                 </div>
                             </div>
+
+                            <?php if ($order['status'] === 'cancelled' && !empty($order['cancel_reason'])): ?>
+                            <div style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(255, 68, 68, 0.1); border-radius: 8px; border-left: 4px solid #ff4444;">
+                                <div style="color: #ff4444; font-weight: 600; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                                    <i class="fas fa-exclamation-triangle"></i> Motif d'annulation
+                                </div>
+                                <div style="color: var(--text-primary); font-size: 0.9rem;">
+                                    <?php echo htmlspecialchars($order['cancel_reason']); ?>
+                                </div>
+                            </div>
+                            <?php endif; ?>
 
                             <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
                                 <button onclick="viewOrder(<?php echo $order['id']; ?>)"
@@ -433,6 +454,12 @@ $stats = [
                                     hour: '2-digit', minute: '2-digit'
                                 })}</span>
                             </div>
+                            ${order.status === 'cancelled' && order.cancel_reason ? `
+                                <div style="margin-top: 1rem; padding: 1rem; background: rgba(255, 68, 68, 0.1); border-radius: 8px; border-left: 4px solid #ff4444;">
+                                    <h5 style="color: #ff4444; margin-bottom: 0.5rem;"><i class="fas fa-exclamation-triangle"></i> Motif d'annulation:</h5>
+                                    <p style="margin: 0; color: var(--text-primary);">${order.cancel_reason}</p>
+                                </div>
+                            ` : ''}
                             ${order.admin_notes ? `
                                 <div style="margin-top: 1rem; padding: 1rem; background: rgba(0, 255, 136, 0.1); border-radius: 8px;">
                                     <h5 style="color: var(--primary-color); margin-bottom: 0.5rem;">Note de l'administrateur:</h5>
