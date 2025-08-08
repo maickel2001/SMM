@@ -1,5 +1,28 @@
 <?php
-require_once '../includes/auth.php';
+// Détecter automatiquement le chemin correct
+$current_dir = __DIR__;
+$parent_dir = dirname($current_dir);
+
+// Essayer différents chemins possibles
+$possible_paths = [
+    $parent_dir . '/includes/auth.php',
+    '/workspace/Presque parfait /includes/auth.php',
+    '/workspace/Presque parfait/includes/auth.php'
+];
+
+$auth_path = null;
+foreach ($possible_paths as $path) {
+    if (file_exists($path)) {
+        $auth_path = $path;
+        break;
+    }
+}
+
+if (!$auth_path) {
+    die("Erreur: Impossible de trouver le fichier auth.php. Chemins testés: " . implode(', ', $possible_paths));
+}
+
+require_once $auth_path;
 $auth = new Auth();
 
 // Redirection si déjà connecté
