@@ -56,6 +56,41 @@ $popular_services = $db->fetchAll("
     ORDER BY order_count DESC
     LIMIT 5
 ");
+
+// Données pour le graphique (derniers 7 jours)
+$chart_data = $db->fetchAll("
+    SELECT DATE(created_at) as date, 
+           COUNT(*) as orders_count,
+           COALESCE(SUM(total_amount), 0) as revenue
+    FROM orders 
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+    GROUP BY DATE(created_at)
+    ORDER BY date ASC
+");
+
+// Remplir les jours manquants avec 0
+$dates = [];
+$orders_data = [];
+$revenue_data = [];
+for ($i = 6; $i >= 0; $i--) {
+    $date = date('Y-m-d', strtotime("-$i days"));
+    $dates[] = date('d/m', strtotime($date));
+    
+    $found = false;
+    foreach ($chart_data as $data) {
+        if ($data['date'] === $date) {
+            $orders_data[] = (int)$data['orders_count'];
+            $revenue_data[] = (float)$data['revenue'];
+            $found = true;
+            break;
+        }
+    }
+    
+    if (!$found) {
+        $orders_data[] = 0;
+        $revenue_data[] = 0;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -65,6 +100,244 @@ $popular_services = $db->fetchAll("
     <title>Dashboard Admin - <?php echo SITE_NAME; ?></title>
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Styles spécifiques au dashboard admin amélioré */
+        .admin-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .admin-header {
+            background: linear-gradient(135deg, var(--card-bg) 0%, #2a2a2a 100%);
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border-left: 5px solid var(--primary-color);
+            box-shadow: var(--shadow);
+        }
+        
+        .admin-welcome {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        
+        .welcome-text h1 {
+            color: var(--primary-color);
+            margin: 0 0 0.5rem 0;
+            font-size: 2rem;
+        }
+        
+        .welcome-text p {
+            color: var(--text-secondary);
+            margin: 0;
+        }
+        
+        .admin-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background: rgba(0, 255, 136, 0.1);
+            padding: 1rem;
+            border-radius: 10px;
+            border: 1px solid var(--primary-color);
+        }
+        
+        .admin-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--gradient-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: linear-gradient(145deg, var(--card-bg) 0%, #2a2a2a 100%);
+            border-radius: 15px;
+            padding: 1.5rem;
+            border-left: 5px solid var(--primary-color);
+            box-shadow: var(--shadow);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-hover);
+        }
+        
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .stat-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            font-size: 1.5rem;
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--primary-color);
+            margin: 0;
+        }
+        
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin: 0.5rem 0 0 0;
+        }
+        
+        .stat-change {
+            font-size: 0.8rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+        
+        .positive { background: rgba(0, 255, 136, 0.2); color: var(--primary-color); }
+        .neutral { background: rgba(255, 165, 0, 0.2); color: #ffa500; }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .chart-container {
+            background: linear-gradient(145deg, var(--card-bg) 0%, #2a2a2a 100%);
+            border-radius: 15px;
+            padding: 1.5rem;
+            border-left: 5px solid var(--primary-color);
+            box-shadow: var(--shadow);
+        }
+        
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .chart-title {
+            color: var(--primary-color);
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin: 0;
+        }
+        
+        .quick-stats {
+            background: linear-gradient(145deg, var(--card-bg) 0%, #2a2a2a 100%);
+            border-radius: 15px;
+            padding: 1.5rem;
+            border-left: 5px solid var(--primary-color);
+            box-shadow: var(--shadow);
+        }
+        
+        .quick-stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            background: rgba(0, 255, 136, 0.05);
+            border-radius: 10px;
+            border-left: 3px solid var(--primary-color);
+        }
+        
+        .orders-section {
+            background: linear-gradient(145deg, var(--card-bg) 0%, #2a2a2a 100%);
+            border-radius: 15px;
+            padding: 1.5rem;
+            border-left: 5px solid var(--primary-color);
+            box-shadow: var(--shadow);
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .section-title {
+            color: var(--primary-color);
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin: 0;
+        }
+        
+        .order-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            background: rgba(0, 255, 136, 0.05);
+            border-radius: 10px;
+            border-left: 3px solid var(--primary-color);
+            transition: background 0.3s ease;
+        }
+        
+        .order-item:hover {
+            background: rgba(0, 255, 136, 0.1);
+        }
+        
+        .order-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .order-details h4 {
+            color: var(--text-primary);
+            margin: 0 0 0.25rem 0;
+            font-size: 0.9rem;
+        }
+        
+        .order-details p {
+            color: var(--text-secondary);
+            margin: 0;
+            font-size: 0.8rem;
+        }
+        
+        .order-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        @media (max-width: 768px) {
+            .admin-container { padding: 1rem; }
+            .admin-welcome { flex-direction: column; text-align: center; }
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+        }
+    </style>
 </head>
 <body>
     <!-- Navigation Admin -->
@@ -83,7 +356,7 @@ $popular_services = $db->fetchAll("
                 </div>
 
                 <ul class="nav-links" id="navLinks">
-                    <li><a href="dashboard.php">Dashboard</a></li>
+                    <li><a href="dashboard.php" class="active">Dashboard</a></li>
                     <li><a href="orders.php">Commandes</a></li>
                     <li><a href="users.php">Utilisateurs</a></li>
                     <li><a href="services.php">Services</a></li>
@@ -99,266 +372,208 @@ $popular_services = $db->fetchAll("
         </div>
     </nav>
 
-    <!-- Dashboard Admin -->
-    <div class="dashboard">
-        <div class="container">
-            <div class="dashboard-header">
-                <div>
-                    <h1 style="color: var(--text-primary); margin-bottom: 0.5rem;">
-                        <i class="fas fa-tachometer-alt"></i> Dashboard Administrateur
-                    </h1>
-                    <p style="color: var(--text-secondary);">
-                        Bienvenue, <?php echo htmlspecialchars($admin['name']); ?> ! Vue d'ensemble de la plateforme SMM.
-                    </p>
+    <div class="admin-container" style="margin-top: 100px;">
+        <!-- En-tête d'accueil -->
+        <div class="admin-header">
+            <div class="admin-welcome">
+                <div class="welcome-text">
+                    <h1><i class="fas fa-tachometer-alt"></i> Dashboard Administrateur</h1>
+                    <p>Gérez votre plateforme SMM et suivez les performances en temps réel</p>
                 </div>
-                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                    <a href="orders.php?status=pending" class="btn btn-primary">
-                        <i class="fas fa-clock"></i> Commandes en attente (<?php echo $stats['pending_orders']; ?>)
-                    </a>
-                </div>
-            </div>
-
-            <!-- Statistiques principales -->
-            <div class="dashboard-stats">
-                <div class="stat-card">
-                    <div class="stat-number"><?php echo $stats['total_users']; ?></div>
-                    <div class="stat-label">
-                        <i class="fas fa-users"></i> Utilisateurs
-                        <small>(+<?php echo $new_users_week; ?> cette semaine)</small>
+                <div class="admin-info">
+                    <div class="admin-avatar">
+                        <?php echo strtoupper(substr($admin['name'], 0, 2)); ?>
                     </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number"><?php echo $stats['total_orders']; ?></div>
-                    <div class="stat-label">
-                        <i class="fas fa-shopping-cart"></i> Total Commandes
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number"><?php echo $stats['pending_orders']; ?></div>
-                    <div class="stat-label">
-                        <i class="fas fa-clock"></i> En Attente
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number"><?php echo formatPrice($stats['total_revenue']); ?></div>
-                    <div class="stat-label">
-                        <i class="fas fa-money-bill-wave"></i> Chiffre d'Affaires
-                        <small>(+<?php echo formatPrice($revenue_week); ?> cette semaine)</small>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Statistiques détaillées -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
-                <div class="stat-card">
-                    <div class="stat-number" style="color: var(--warning-color);"><?php echo $stats['processing_orders']; ?></div>
-                    <div class="stat-label">
-                        <i class="fas fa-cogs"></i> En Cours
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" style="color: var(--success-color);"><?php echo $stats['completed_orders']; ?></div>
-                    <div class="stat-label">
-                        <i class="fas fa-check-circle"></i> Terminées
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" style="color: var(--error-color);"><?php echo $stats['cancelled_orders']; ?></div>
-                    <div class="stat-label">
-                        <i class="fas fa-times-circle"></i> Annulées
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" style="color: var(--primary-color);"><?php echo formatPrice($stats['pending_revenue']); ?></div>
-                    <div class="stat-label">
-                        <i class="fas fa-hourglass-half"></i> CA en attente
-                    </div>
-                </div>
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 300px; gap: 2rem; align-items: start;">
-                <!-- Commandes nécessitant une attention -->
-                <div class="card">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                        <h2 style="color: var(--primary-color);">
-                            <i class="fas fa-exclamation-circle"></i> Commandes à Traiter
-                        </h2>
-                        <a href="orders.php" style="color: var(--primary-color); text-decoration: none;">
-                            Voir toutes <i class="fas fa-arrow-right"></i>
-                        </a>
-                    </div>
-
-                    <?php if (empty($recent_orders)): ?>
-                        <div style="text-align: center; padding: 3rem 1rem; color: var(--text-secondary);">
-                            <i class="fas fa-check-circle" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; color: var(--success-color);"></i>
-                            <h3>Aucune commande en attente</h3>
-                            <p>Toutes les commandes sont traitées ! 🎉</p>
-                        </div>
-                    <?php else: ?>
-                        <div class="table-container">
-                            <table class="table">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Client</th>
-                                        <th>Service</th>
-                                        <th>Montant</th>
-                                        <th>Statut</th>
-                                        <th>Date</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($recent_orders as $order): ?>
-                                    <tr>
-                                        <td style="font-weight: 600; color: var(--primary-color);">#<?php echo $order['id']; ?></td>
-                                        <td>
-                                            <div>
-                                                <div style="font-weight: 600;"><?php echo htmlspecialchars($order['user_name']); ?></div>
-                                                <div style="font-size: 0.8rem; color: var(--text-secondary);"><?php echo htmlspecialchars($order['user_email']); ?></div>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                                <i class="<?php echo $order['category_icon']; ?>" style="color: var(--primary-color);"></i>
-                                                <div>
-                                                    <div style="font-weight: 600;"><?php echo htmlspecialchars($order['service_name']); ?></div>
-                                                    <div style="font-size: 0.8rem; color: var(--text-secondary);">Qty: <?php echo number_format($order['quantity']); ?></div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td style="font-weight: 600;"><?php echo formatPrice($order['total_amount']); ?></td>
-                                        <td>
-                                            <span class="status-badge status-<?php echo $order['status']; ?>">
-                                                <?php
-                                                switch($order['status']) {
-                                                    case 'pending': echo 'En attente'; break;
-                                                    case 'processing': echo 'En cours'; break;
-                                                    case 'completed': echo 'Terminé'; break;
-                                                    case 'cancelled': echo 'Annulé'; break;
-                                                }
-                                                ?>
-                                            </span>
-                                        </td>
-                                        <td><?php echo date('d/m H:i', strtotime($order['created_at'])); ?></td>
-                                        <td>
-                                            <a href="orders.php?view=<?php echo $order['id']; ?>"
-                                               class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem; text-decoration: none;">
-                                                <i class="fas fa-edit"></i>
-                                            </a>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    <?php endif; ?>
-                </div>
-
-                <!-- Sidebar avec actions et infos -->
-                <div>
-                    <!-- Actions rapides -->
-                    <div class="card" style="margin-bottom: 1.5rem;">
-                        <h3 style="color: var(--primary-color); margin-bottom: 1rem;">
-                            <i class="fas fa-bolt"></i> Actions Rapides
-                        </h3>
-                        <div style="display: grid; gap: 0.75rem;">
-                            <a href="orders.php?status=pending" class="btn btn-primary" style="text-decoration: none;">
-                                <i class="fas fa-clock"></i> Commandes en attente
-                            </a>
-                            <a href="services.php" class="btn btn-secondary" style="text-decoration: none;">
-                                <i class="fas fa-cogs"></i> Gérer les services
-                            </a>
-                            <a href="users.php" class="btn btn-secondary" style="text-decoration: none;">
-                                <i class="fas fa-users"></i> Voir les utilisateurs
-                            </a>
-                            <a href="categories.php" class="btn btn-secondary" style="text-decoration: none;">
-                                <i class="fas fa-tags"></i> Gérer les catégories
-                            </a>
-                        </div>
-                    </div>
-
-                    <!-- Services populaires -->
-                    <div class="card" style="margin-bottom: 1.5rem;">
-                        <h3 style="color: var(--primary-color); margin-bottom: 1rem;">
-                            <i class="fas fa-fire"></i> Services Populaires
-                        </h3>
-                        <div style="display: grid; gap: 0.75rem;">
-                            <?php foreach ($popular_services as $service): ?>
-                            <div style="padding: 0.75rem; background: var(--secondary-color); border-radius: 6px;">
-                                <div style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem; margin-bottom: 0.25rem;">
-                                    <?php echo htmlspecialchars($service['name']); ?>
-                                </div>
-                                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-secondary);">
-                                    <span><?php echo $service['order_count']; ?> commandes</span>
-                                    <span><?php echo formatPrice($service['revenue']); ?></span>
-                                </div>
-                            </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-
-                    <!-- Alertes système -->
-                    <div class="card">
-                        <h3 style="color: var(--warning-color); margin-bottom: 1rem;">
-                            <i class="fas fa-exclamation-triangle"></i> Alertes Système
-                        </h3>
-                        <div style="display: grid; gap: 0.5rem;">
-                            <?php if ($stats['pending_orders'] > 10): ?>
-                            <div style="padding: 0.5rem; background: rgba(255, 165, 0, 0.1); border-radius: 4px; color: var(--warning-color); font-size: 0.9rem;">
-                                <i class="fas fa-clock"></i> <?php echo $stats['pending_orders']; ?> commandes en attente
-                            </div>
-                            <?php endif; ?>
-
-                            <?php if ($new_users_week > 50): ?>
-                            <div style="padding: 0.5rem; background: rgba(0, 255, 136, 0.1); border-radius: 4px; color: var(--success-color); font-size: 0.9rem;">
-                                <i class="fas fa-users"></i> <?php echo $new_users_week; ?> nouveaux utilisateurs cette semaine
-                            </div>
-                            <?php endif; ?>
-
-                            <div style="padding: 0.5rem; background: rgba(0, 255, 136, 0.1); border-radius: 4px; color: var(--primary-color); font-size: 0.9rem;">
-                                <i class="fas fa-info-circle"></i> Système opérationnel
-                            </div>
-                        </div>
+                    <div>
+                        <h4 style="margin: 0; color: var(--primary-color);"><?php echo htmlspecialchars($admin['name']); ?></h4>
+                        <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">Administrateur</p>
                     </div>
                 </div>
             </div>
         </div>
+
+        <!-- Statistiques principales -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon" style="background: var(--gradient-primary);">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <span class="stat-change positive">+<?php echo $new_users_week; ?> cette semaine</span>
+                </div>
+                <h2 class="stat-number"><?php echo number_format($stats['total_users']); ?></h2>
+                <p class="stat-label">Utilisateurs inscrits</p>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon" style="background: var(--gradient-primary);">
+                        <i class="fas fa-shopping-cart"></i>
+                    </div>
+                    <span class="stat-change positive"><?php echo $stats['pending_orders'] + $stats['processing_orders']; ?> actives</span>
+                </div>
+                <h2 class="stat-number"><?php echo number_format($stats['total_orders']); ?></h2>
+                <p class="stat-label">Total des commandes</p>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon" style="background: var(--gradient-primary);">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <span class="stat-change positive"><?php echo formatPrice($revenue_week); ?> cette semaine</span>
+                </div>
+                <h2 class="stat-number"><?php echo formatPrice($stats['total_revenue']); ?></h2>
+                <p class="stat-label">Chiffre d'affaires</p>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon" style="background: var(--gradient-primary);">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <span class="stat-change neutral"><?php echo formatPrice($stats['pending_revenue']); ?> en attente</span>
+                </div>
+                <h2 class="stat-number"><?php echo number_format($stats['completed_orders']); ?></h2>
+                <p class="stat-label">Commandes terminées</p>
+            </div>
+        </div>
+
+        <!-- Graphiques et stats rapides -->
+        <div class="dashboard-grid">
+            <div class="chart-container">
+                <div class="chart-header">
+                    <h3 class="chart-title"><i class="fas fa-chart-area"></i> Évolution des commandes (7 derniers jours)</h3>
+                </div>
+                <canvas id="ordersChart" width="400" height="200"></canvas>
+            </div>
+
+            <div class="quick-stats">
+                <h3 class="section-title"><i class="fas fa-bolt"></i> Statuts des commandes</h3>
+                <div class="quick-stat-item">
+                    <span style="color: var(--text-primary);">
+                        <i class="fas fa-hourglass-half" style="color: #ffa500;"></i> En attente
+                    </span>
+                    <strong style="color: var(--primary-color);"><?php echo $stats['pending_orders']; ?></strong>
+                </div>
+                <div class="quick-stat-item">
+                    <span style="color: var(--text-primary);">
+                        <i class="fas fa-cog fa-spin" style="color: #007bff;"></i> En cours
+                    </span>
+                    <strong style="color: var(--primary-color);"><?php echo $stats['processing_orders']; ?></strong>
+                </div>
+                <div class="quick-stat-item">
+                    <span style="color: var(--text-primary);">
+                        <i class="fas fa-check-circle" style="color: var(--primary-color);"></i> Terminées
+                    </span>
+                    <strong style="color: var(--primary-color);"><?php echo $stats['completed_orders']; ?></strong>
+                </div>
+                <div class="quick-stat-item">
+                    <span style="color: var(--text-primary);">
+                        <i class="fas fa-times-circle" style="color: #ff4444;"></i> Annulées
+                    </span>
+                    <strong style="color: var(--primary-color);"><?php echo $stats['cancelled_orders']; ?></strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Commandes récentes -->
+        <div class="orders-section">
+            <div class="section-header">
+                <h3 class="section-title"><i class="fas fa-list-alt"></i> Commandes nécessitant votre attention</h3>
+                <a href="orders.php" class="btn btn-primary">
+                    <i class="fas fa-eye"></i> Voir toutes
+                </a>
+            </div>
+
+            <?php if (empty($recent_orders)): ?>
+                <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    <i class="fas fa-check-circle" style="font-size: 3rem; color: var(--primary-color); margin-bottom: 1rem;"></i>
+                    <h4>Aucune commande en attente</h4>
+                    <p>Toutes les commandes sont traitées !</p>
+                </div>
+            <?php else: ?>
+                <?php foreach ($recent_orders as $order): ?>
+                    <div class="order-item">
+                        <div class="order-info">
+                            <div class="stat-icon" style="background: var(--gradient-primary); width: 40px; height: 40px; font-size: 1rem;">
+                                <i class="<?php echo $order['category_icon']; ?>"></i>
+                            </div>
+                            <div class="order-details">
+                                <h4>Commande #<?php echo $order['id']; ?> - <?php echo htmlspecialchars($order['service_name']); ?></h4>
+                                <p>
+                                    <i class="fas fa-user"></i> <?php echo htmlspecialchars($order['user_name']); ?> • 
+                                    <i class="fas fa-calendar"></i> <?php echo date('d/m/Y H:i', strtotime($order['created_at'])); ?> • 
+                                    <i class="fas fa-coins"></i> <?php echo formatPrice($order['total_amount']); ?>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="order-actions">
+                            <span class="status-badge status-<?php echo $order['status']; ?>">
+                                <?php echo $order['status'] === 'pending' ? 'En attente' : 'En cours'; ?>
+                            </span>
+                            <a href="orders.php?id=<?php echo $order['id']; ?>" class="btn btn-primary" style="padding: 0.5rem 1rem;">
+                                <i class="fas fa-arrow-right"></i>
+                            </a>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
     </div>
 
     <script>
+        // Configuration du graphique
+        const ctx = document.getElementById('ordersChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: <?php echo json_encode($dates); ?>,
+                datasets: [{
+                    label: 'Commandes',
+                    data: <?php echo json_encode($orders_data); ?>,
+                    borderColor: '#00ff88',
+                    backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#ffffff'
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            color: '#b0b0b0'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            color: '#b0b0b0'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    }
+                }
+            }
+        });
+
+        // Fonction pour le menu mobile
         function toggleMobileMenu() {
             const navLinks = document.getElementById('navLinks');
             navLinks.classList.toggle('active');
         }
-
-        // Auto-refresh des statistiques toutes les 30 secondes
-        setInterval(() => {
-            fetch('api/admin-stats.php')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Mettre à jour les statistiques sans recharger la page
-                        document.querySelector('.stat-card:nth-child(3) .stat-number').textContent = data.stats.pending_orders;
-                    }
-                })
-                .catch(error => console.log('Erreur lors de la mise à jour des stats'));
-        }, 30000);
-
-        // Graphique simple des commandes (pourrait être amélioré avec Chart.js)
-        function createSimpleChart() {
-            // Cette fonction pourrait être étendue pour créer des graphiques
-            console.log('Graphiques disponibles dans une version future');
-        }
-
-        // Notifications pour nouvelles commandes
-        function checkNewOrders() {
-            // Cette fonction pourrait vérifier les nouvelles commandes
-            console.log('Vérification des nouvelles commandes...');
-        }
-
-        // Démarrer les vérifications périodiques
-        setInterval(checkNewOrders, 60000); // Chaque minute
     </script>
 </body>
 </html>
